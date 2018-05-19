@@ -1,6 +1,7 @@
 package com.brunomb.processadorplanilhas.endpoints.processador;
 
 import java.io.IOException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServletRequest;
@@ -43,9 +44,13 @@ public class ProcessadorPlanilhaController {
 	public ResponseEntity<Object> handle(@RequestParam("file") MultipartFile file,
 			@RequestParam("config") String config) throws IOException {
 		ConfiguracaoProcessamento cfg = buildCfg(config);
-		
-		ProcessadorPlanilha processador = new ProcessadorPlanilha(file.getInputStream(), cfg, null);
+
+		ProcessadorPlanilha processador = new ProcessadorPlanilha(file.getOriginalFilename(), file.getInputStream(),
+				cfg, null);
 		ResultadoProcessamento resultado = processador.processar();
+
+		LOGGER.log(Level.INFO, "Processamento da planilha finalizado: {0}. Houveram {1} erros.",
+				new Object[] { file.getOriginalFilename(), resultado.erros.size() });
 
 		if (resultado.erros.isEmpty()) {
 			byte[] bytes = resultado.planilhaProcessada.toByteArray();
@@ -54,7 +59,7 @@ public class ProcessadorPlanilhaController {
 
 			return ResponseEntity.ok().body(fileName);
 		} else {
-			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(resultado.erros);
+			return ResponseEntity.ok().body(resultado.erros);
 		}
 
 	}
@@ -70,20 +75,19 @@ public class ProcessadorPlanilhaController {
 		try {
 			contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
 		} catch (IOException ex) {
-			LOGGER.info("Could not determine file type.");
+			LOGGER.log(Level.INFO, "Could not determine file type of {0}.", fileName);
 		}
 
 		if (contentType == null) {
 			contentType = "application/vnd.ms-excel";
 		}
-		
+
 		String realFileName = resource.getFilename().split("_")[0];
 		realFileName += "Processada.xlsx";
-		
+
 		return ResponseEntity.ok().contentType(MediaType.parseMediaType(contentType))
 				.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + realFileName + "\"")
-				.header("file-name", realFileName)
-				.body(resource);
+				.header("file-name", realFileName).body(resource);
 	}
 
 	@ExceptionHandler
